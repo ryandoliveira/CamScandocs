@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  color: #d1d1d1;
+  transition: background 0.5s, color 0.5s;
+}
+
+a, button { cursor: pointer; }
+
+:root {
+  --primary: #1f8a35;
+  --primary-light: #66c27d;
+  --bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --text: #2c2c2c;
+  --muted: #6c757d;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --radius: 12px;
+  --transition: 0.3s ease-in-out;
+}
+
+[data-theme="dark"] {
+  --bg: #121212;
+  --card-bg: #1e1e1e;
+  --text: #e0e0e0;
+  --muted: #9a9a9a;
+}
