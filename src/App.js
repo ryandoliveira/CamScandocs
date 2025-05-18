@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Tesseract from "tesseract.js";
 import { saveAs } from "file-saver";
 import { jsPDF } from "jspdf";
-import * as docx from "docx";
+import { Document, Packer, Paragraph } from "docx";
 
 function App() {
   const videoRef = useRef(null);
@@ -36,8 +36,7 @@ function App() {
     script.src = "https://docs.opencv.org/4.5.5/opencv.js";
     script.async = true;
     script.onload = () => {
-      // Espera o OpenCV ser inicializado
-      window.cv['onRuntimeInitialized'] = () => {
+      window.cv.onRuntimeInitialized = () => {
         setCvReady(true);
         console.log("OpenCV.js carregado e pronto");
       };
@@ -52,15 +51,22 @@ function App() {
     };
   }, []);
 
-  // Captura a imagem do vídeo para o canvas
+  // Capturar imagem do vídeo
   const captureImage = () => {
+    const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    canvas.width = 1024;
-    canvas.height = 768;
-    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    const image = canvas.toDataURL("image/png");
-    setImageData(image);
+    if (video && canvas) {
+      canvas.width = 1024;
+      canvas.height = 768;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        console.error("Contexto 2D do canvas não disponível");
+        return;
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/png");
+      setImageData(dataUrl);
+    }
   };
 
   // Função para auto recortar com OpenCV
@@ -112,15 +118,21 @@ function App() {
   // Salvar imagem nos formatos escolhidos
   const saveImage = () => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
+
     if (format === "pdf") {
       const pdf = new jsPDF();
       const imgData = canvas.toDataURL("image/jpeg", 1.0);
       pdf.addImage(imgData, "JPEG", 10, 10, 190, 130);
       pdf.save("documento.pdf");
     } else {
-      canvas.toBlob((blob) => {
-        saveAs(blob, `documento.${format}`);
-      }, `image/${format}`);
+      if (canvas.toBlob) {
+        canvas.toBlob((blob) => {
+          if (blob) saveAs(blob, `documento.${format}`);
+        }, `image/${format}`);
+      } else {
+        alert("Seu navegador não suporta salvar arquivos neste formato.");
+      }
     }
   };
 
@@ -141,16 +153,16 @@ function App() {
 
   // Salvar texto em DOCX
   const saveTextAsDOCX = () => {
-    const doc = new docx.Document({
+    const doc = new Document({
       sections: [
         {
           properties: {},
-          children: [new docx.Paragraph(extractedText)],
+          children: [new Paragraph(extractedText)],
         },
       ],
     });
 
-    docx.Packer.toBlob(doc).then((blob) => {
+    Packer.toBlob(doc).then((blob) => {
       saveAs(blob, "documento.docx");
     });
   };
@@ -159,15 +171,23 @@ function App() {
     <div className="container">
       <h1 className="mb-4">📄 Scanner de Documentos</h1>
 
-      <video ref={videoRef} autoPlay playsInline width="100%" height="auto" />
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        width="100%"
+        height="auto"
+        style={{ borderRadius: "8px", border: "1px solid #ccc" }}
+      />
 
       <div className="my-3 d-flex flex-wrap gap-2">
         <button className="btn btn-success" onClick={captureImage}>
           📷 Capturar Foto
         </button>
-            <button className="btn btn-warning" onClick={autoCrop} disabled={!cvReady || !imageData}>
-  ✂️ Auto Recorte (IA)
-</button>
+        <button className="btn btn-warning" onClick={autoCrop} disabled={!cvReady || !imageData}>
+          ✂️ Auto Recorte (IA)
+        </button>
+
         <button className="btn btn-primary" onClick={extractText}>
           🧠 Reconhecer Texto (OCR)
         </button>
@@ -176,8 +196,8 @@ function App() {
       <canvas
         id="canvas"
         ref={canvasRef}
-        style={{ width: "100%", maxWidth: "600px" }}
         className="mb-3"
+        style={{ width: "100%", maxWidth: "1024px", border: "1px solid #ddd", borderRadius: "4px" }}
       />
 
       {imageData && (
