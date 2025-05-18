@@ -165,9 +165,9 @@ function App() {
         <button className="btn btn-success" onClick={captureImage}>
           📷 Capturar Foto
         </button>
-        <button className="btn btn-warning" onClick={autoCrop} disabled={!cvReady}>
-          ✂️ Auto Recorte (IA)
-        </button>
+            <button className="btn btn-warning" onClick={autoCrop} disabled={!cvReady || !imageData}>
+  ✂️ Auto Recorte (IA)
+</button>
         <button className="btn btn-primary" onClick={extractText}>
           🧠 Reconhecer Texto (OCR)
         </button>
