@@ -72,38 +72,97 @@ function App() {
   // Função para auto recortar com OpenCV
   const autoCrop = () => {
     if (!cvReady) {
-      alert("OpenCV.js ainda não está pronto, aguarde alguns segundos.");
+      alert("OpenCV.js ainda não está pronto.");
       return;
     }
-
-    const canvasElement = canvasRef.current;
-    if (!canvasElement) {
-      console.error("Canvas não encontrado");
-      return;
-    }
-
+  
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+  
     try {
-      const src = window.cv.imread(canvasElement);
-      const dst = new window.cv.Mat();
-
-      window.cv.cvtColor(src, src, window.cv.COLOR_RGBA2GRAY, 0);
-      window.cv.GaussianBlur(src, src, new window.cv.Size(5, 5), 0);
-      window.cv.Canny(src, dst, 75, 200);
-
-      window.cv.imshow(canvasElement, dst);
-
-      src.delete();
-      dst.delete();
+      const src = cv.imread(canvas);
+      let gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+      cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+      let edges = new cv.Mat();
+      cv.Canny(gray, edges, 75, 200);
+  
+      // Encontrar contornos
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+  
+      let biggest = null;
+      let maxArea = 0;
+  
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const peri = cv.arcLength(cnt, true);
+        const approx = new cv.Mat();
+        cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+  
+        if (approx.rows === 4) {
+          const area = cv.contourArea(cnt);
+          if (area > maxArea) {
+            biggest = approx;
+            maxArea = area;
+          }
+        }
+      }
+  
+      if (biggest) {
+        const srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+          biggest.data32F[0], biggest.data32F[1],
+          biggest.data32F[2], biggest.data32F[3],
+          biggest.data32F[4], biggest.data32F[5],
+          biggest.data32F[6], biggest.data32F[7],
+        ]);
+  
+        const dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+          0, 0,
+          800, 0,
+          800, 1000,
+          0, 1000,
+        ]);
+  
+        const M = cv.getPerspectiveTransform(srcCoords, dstCoords);
+        const dst = new cv.Mat();
+        cv.warpPerspective(src, dst, M, new cv.Size(800, 1000));
+  
+        cv.imshow(canvas, dst);
+  
+        // Liberação de memória
+        gray.delete(); edges.delete(); contours.delete(); hierarchy.delete();
+        biggest.delete(); srcCoords.delete(); dstCoords.delete(); M.delete(); src.delete(); dst.delete();
+      } else {
+        alert("Nenhum documento detectado.");
+      }
     } catch (err) {
-      console.error("Erro ao processar imagem com OpenCV:", err);
-      alert("Erro ao processar imagem com OpenCV. Veja o console.");
+      console.error("Erro no auto recorte:", err);
     }
   };
 
+  const preprocessForOCR = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const src = cv.imread(canvas);
+    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
+    cv.adaptiveThreshold(
+      src, src, 255,
+      cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+      cv.THRESH_BINARY,
+      11, 2
+    );
+    cv.imshow(canvas, src);
+    src.delete();
+  };
+  
+  
   // Extrair texto com OCR
   const extractText = async () => {
     setLoadingOCR(true);
     try {
+      preprocessForOCR(); // chama o pré-processamento aqui
       const dataUrl = canvasRef.current.toDataURL("image/png");
       const result = await Tesseract.recognize(dataUrl, "por", {
         logger: (m) => console.log(m),
@@ -114,6 +173,7 @@ function App() {
     }
     setLoadingOCR(false);
   };
+  
 
   // Salvar imagem nos formatos escolhidos
   const saveImage = () => {
@@ -144,12 +204,16 @@ function App() {
 
   // Salvar texto em PDF
   const saveTextAsPDF = () => {
-    const pdf = new jsPDF();
-    pdf.setFontSize(12);
-    const lines = pdf.splitTextToSize(extractedText, 180);
-    pdf.text(lines, 10, 10);
+    const pdf = new jsPDF({ unit: "pt", format: "a4" });
+    pdf.setFillColor(255, 255, 255); // fundo branco
+    pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), "F");
+  
+    pdf.setFontSize(14);
+    const lines = pdf.splitTextToSize(extractedText, 500);
+    pdf.text(lines, 40, 60);
     pdf.save("documento_texto.pdf");
   };
+  
 
   // Salvar texto em DOCX
   const saveTextAsDOCX = () => {
